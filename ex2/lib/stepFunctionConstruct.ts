@@ -1,0 +1,67 @@
+import * as cdk from '@aws-cdk/core';
+import * as lambda from '@aws-cdk/aws-lambda';
+import * as path from 'path';
+import * as sfn from '@aws-cdk/aws-stepfunctions';
+import * as tasks from '@aws-cdk/aws-stepfunctions-tasks';
+import { LambdaConstruct } from "./lambdaConstruct";
+
+interface StepFunctionConstructProps extends cdk.StackProps {
+
+}
+
+export class StepFunctionConstruct extends cdk.Construct {
+    constructor(scope: cdk.Construct, id: string, lambdaConstruct: LambdaConstruct, props?: StepFunctionConstructProps) {
+        super(scope, id);
+
+        const reportGenerate = new tasks.LambdaInvoke(this, 'GenerateClientReport', {
+            lambdaFunction: lambdaConstruct.reportGenerate,
+            resultPath:'$.reportGenerationOutput'
+        });
+
+        const mapEmailPathForUnEncryptedReport = new sfn.Pass(this, 'MapEmailPathForUnEncryptedReport', {
+            parameters : {
+                emailFile: '$.reportGenerationOutput.Payload',
+                unencryptedFile: '$.reportGenerationOutput.Payload'
+            },
+            resultPath: '$.reportOptions.reportData'
+        });
+
+        const encryptReport = new tasks.LambdaInvoke(this, 'EncryptReport', {
+            lambdaFunction: lambdaConstruct.encryptionFunction,
+            inputPath:'$.reportOptions.reportData.unecryptedFile',
+            resultPath: '$.encryptionOutput'
+        })
+
+        // const shouldEncrypt = new sfn.Choice(this, 'ShouldEncrypt');
+        // shouldEncrypt.when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', true, encryptReport))
+
+        const mapEmailPathForEncryptedReport = new sfn.Pass(this, 'MapEmailPathForEncryptedReport', {
+            parameters : {
+                emailFile: '$.encryptionOutput.Payload',
+                encryptedFile:'$.encryptionOutput.Payload',
+                unencryptedFile: '$.reportGenerationOutput.Payload'
+            },
+            resultPath: '$.reportOptions.reportData'
+        });
+
+        const emailReport = new tasks.LambdaInvoke(this, 'EmailReport', {
+            lambdaFunction: lambdaConstruct.emailFunction,
+            inputPath:'$.reportOptions',
+            resultPath: '$.emailOutput'
+        });
+
+        const definition = reportGenerate
+            .next(mapEmailPathForUnEncryptedReport)
+            .next(encryptReport)
+            .next(mapEmailPathForEncryptedReport)
+            .next(emailReport)
+
+        new sfn.StateMachine(this, 'Glomonatics-report-generation-workflow-tutorial', {
+            definition,
+            timeout: cdk.Duration.minutes(5)
+        });
+
+
+
+    }
+}

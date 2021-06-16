@@ -1,0 +1,30 @@
+{
+  "name": "ex2",
+  "version": "0.1.0",
+  "bin": {
+    "ex2": "bin/ex2.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@aws-cdk/assert": "1.108.1",
+    "@types/jest": "^26.0.23",
+    "@types/node": "15.12.2",
+    "jest": "^27.0.4",
+    "ts-jest": "^27.0.3",
+    "aws-cdk": "1.108.1",
+    "ts-node": "^10.0.0",
+    "typescript": "~4.3.2"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-lambda": "^1.108.1",
+    "@aws-cdk/aws-stepfunctions": "^1.108.1",
+    "@aws-cdk/aws-stepfunctions-tasks": "^1.108.1",
+    "@aws-cdk/core": "1.108.1",
+    "source-map-support": "^0.5.19"
+  }
+}
