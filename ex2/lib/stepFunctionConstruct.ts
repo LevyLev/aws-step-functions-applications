@@ -13,35 +13,32 @@ export class StepFunctionConstruct extends cdk.Construct {
     constructor(scope: cdk.Construct, id: string, lambdaConstruct: LambdaConstruct, props?: StepFunctionConstructProps) {
         super(scope, id);
 
-        // @ts-ignore
         const reportGenerate = new tasks.LambdaInvoke(this, 'GenerateClientReport', {
             lambdaFunction: lambdaConstruct.reportGenerate,
             resultPath:'$.reportGenerationOutput'
         });
 
-        // @ts-ignore
         const mapEmailPathForUnEncryptedReport = new sfn.Pass(this, 'MapEmailPathForUnEncryptedReport', {
             parameters : {
-                emailFile: '$.reportGenerationOutput.Payload',
-                unencryptedFile: '$.reportGenerationOutput.Payload'
+                emailFile: sfn.JsonPath.stringAt('$.reportGenerationOutput.Payload'),
+                unencryptedFile: sfn.JsonPath.stringAt('$.reportGenerationOutput.Payload')
             },
             resultPath: '$.reportOptions.reportData'
         });
 
-        // @ts-ignore
         const encryptReport = new tasks.LambdaInvoke(this, 'EncryptReport', {
             lambdaFunction: lambdaConstruct.encryptionFunction,
             payload: sfn.TaskInput.fromObject({
-               reportFile: '$.reportOptions.reportData.unencryptedFile'
+                reportFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.unencryptedFile')
             }),
             resultPath: '$.encryptionOutput'
         })
 
         const mapEmailPathForEncryptedReport = new sfn.Pass(this, 'MapEmailPathForEncryptedReport', {
             parameters : {
-                emailFile: '$.encryptionOutput.Payload',
-                encryptedFile:'$.encryptionOutput.Payload',
-                unencryptedFile: '$.reportGenerationOutput.Payload'
+                emailFile: sfn.JsonPath.stringAt('$.encryptionOutput.Payload'),
+                encryptedFile: sfn.JsonPath.stringAt('$.encryptionOutput.Payload'),
+                unencryptedFile: sfn.JsonPath.stringAt('$.reportGenerationOutput.Payload')
             },
             resultPath: '$.reportOptions.reportData'
         });
@@ -49,10 +46,10 @@ export class StepFunctionConstruct extends cdk.Construct {
         const emailReport = new tasks.LambdaInvoke(this, 'EmailReport', {
             lambdaFunction: lambdaConstruct.emailFunction,
             payload: sfn.TaskInput.fromObject({
-                emailFile:'$.reportOptions.reportData.emailFile',
-                clientEmail:'$.reportOptions.clientEmail',
-                emailSubject:'$.reportOptions.emailSubject',
-                emailBody:'$.reportOptions.emailBody'
+                emailFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.emailFile'),
+                clientEmail: sfn.JsonPath.stringAt('$.reportOptions.clientEmail'),
+                emailSubject: sfn.JsonPath.stringAt('$.reportOptions.emailSubject'),
+                emailBody: sfn.JsonPath.stringAt('$.reportOptions.emailBody')
             }),
             resultPath: '$.emailOutput'
         });
@@ -61,8 +58,8 @@ export class StepFunctionConstruct extends cdk.Construct {
            lambdaFunction:lambdaConstruct.cleanup,
            payload: sfn.TaskInput.fromObject({
                files: {
-                   encryptedFile:'$.reportOptions.reportData.encryptedFile',
-                   unencryptedFile: '$.reportOptions.reportData.encryptedFile'
+                   encryptedFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.encryptedFile'),
+                   unencryptedFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.encryptedFile')
                }
            }),
             resultPath: '$.cleanupOutput'
@@ -72,11 +69,10 @@ export class StepFunctionConstruct extends cdk.Construct {
 
         shouldEncrypt.when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', true), encryptReport
             .next(mapEmailPathForEncryptedReport))
-
+            .when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', false), emailReport)
+        
         shouldEncrypt.afterwards()
-            .next(emailReport)
             .next(cleanup)
-        //shouldEncrypt.when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', false), emailReport);
 
 
         const definition = reportGenerate
