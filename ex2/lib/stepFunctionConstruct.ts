@@ -59,7 +59,7 @@ export class StepFunctionConstruct extends cdk.Construct {
            payload: sfn.TaskInput.fromObject({
                files: {
                    encryptedFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.encryptedFile'),
-                   unencryptedFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.encryptedFile')
+                   unencryptedFile: sfn.JsonPath.stringAt('$.reportOptions.reportData.unencryptedFile')
                }
            }),
             resultPath: '$.cleanupOutput'
@@ -67,19 +67,27 @@ export class StepFunctionConstruct extends cdk.Construct {
 
         const shouldEncrypt = new sfn.Choice(this, 'ShouldEncrypt');
 
-        shouldEncrypt.when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', true), encryptReport
-            .next(mapEmailPathForEncryptedReport))
-            .when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', false), emailReport)
-        
-        shouldEncrypt.afterwards()
-            .next(cleanup)
+        const conditionShouldEncryptTrue = sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', true);
+        const conditionShouldEncryptFalse = sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', false);
+
+        // shouldEncrypt.when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', true), encryptReport
+        //     .next(mapEmailPathForEncryptedReport))
+        //     .when(sfn.Condition.booleanEquals('$.reportOptions.shouldEncrypt', false), emailReport)
+        //
+        // shouldEncrypt.afterwards()
+        //     .next(cleanup)
 
 
         const definition = reportGenerate
             .next(mapEmailPathForUnEncryptedReport)
-            .next(shouldEncrypt);
+            .next(shouldEncrypt
+                .when(conditionShouldEncryptTrue, encryptReport
+                    .next(mapEmailPathForEncryptedReport)
+                    .next(emailReport))
+                .when(conditionShouldEncryptFalse, emailReport)
+                .afterwards()
+                .next(cleanup));
 
-        // @ts-ignore
         new sfn.StateMachine(this, 'Glomonatics-report-generation-workflow-tutorial', {
             definition
         });
